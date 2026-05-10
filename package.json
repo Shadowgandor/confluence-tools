@@ -1,0 +1,39 @@
+{
+  "name": "confluence-tools",
+  "version": "0.1.0",
+  "description": "CLI and MCP server for Atlassian Confluence — read, create, update, and delete pages from your terminal or AI agent.",
+  "author": "GeeveeH Software",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "confluence": "./dist/cli/index.js"
+  },
+  "exports": {
+    ".": "./dist/core/index.js",
+    "./mcp": "./dist/mcp/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev:cli": "tsx src/cli/index.ts",
+    "dev:mcp": "tsx src/mcp/index.ts",
+    "lint": "eslint src/",
+    "test": "vitest run",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "commander": "^13.1.0",
+    "chalk": "^5.4.1",
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "zod": "^3.24.4"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.8.0",
+    "vitest": "^3.1.0",
+    "eslint": "^9.20.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
