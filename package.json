@@ -1,13 +1,13 @@
 {
-  "name": "confluence-tools",
-  "version": "0.1.0",
-  "description": "CLI and MCP server for Atlassian Confluence — read, create, update, and delete pages from your terminal or AI agent.",
+  "name": "atlassian-tools",
+  "version": "0.2.0",
+  "description": "CLI and MCP server for Atlassian Cloud (Confluence, Jira) — manage pages and issues from your terminal or AI agent.",
   "author": "GeeveeH Software",
   "license": "MIT",
   "type": "module",
   "bin": {
-    "confluence": "./dist/cli/index.js",
-    "confluence-mcp": "./dist/mcp/index.js"
+    "atlassian": "./dist/cli/index.js",
+    "atlassian-mcp": "./dist/mcp/index.js"
   },
   "files": [
     "dist",
@@ -16,6 +16,8 @@
   ],
   "exports": {
     ".": "./dist/core/index.js",
+    "./confluence": "./dist/confluence/index.js",
+    "./jira": "./dist/jira/index.js",
     "./mcp": "./dist/mcp/index.js"
   },
   "scripts": {

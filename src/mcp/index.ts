@@ -3,24 +3,33 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { ConfluenceClient, loadConfigFromEnv, ConfluenceApiError } from "../core/index.js";
+import { loadConfigFromEnv, AtlassianApiError } from "../core/index.js";
 import { resolveBody } from "../core/markdown.js";
+import { ConfluenceClient } from "../confluence/client.js";
+import { JiraClient } from "../jira/client.js";
 
-// ── Client singleton ───────────────────────────────────────────────
+// ── Client singletons ─────────────────────────────────────────────
 
-let _client: ConfluenceClient | null = null;
+let _confluenceClient: ConfluenceClient | null = null;
+let _jiraClient: JiraClient | null = null;
 
-function getClient(): ConfluenceClient {
-  if (!_client) {
-    const config = loadConfigFromEnv();
-    _client = new ConfluenceClient(config);
+function getConfluenceClient(): ConfluenceClient {
+  if (!_confluenceClient) {
+    _confluenceClient = new ConfluenceClient(loadConfigFromEnv());
   }
-  return _client;
+  return _confluenceClient;
+}
+
+function getJiraClient(): JiraClient {
+  if (!_jiraClient) {
+    _jiraClient = new JiraClient(loadConfigFromEnv());
+  }
+  return _jiraClient;
 }
 
 function formatError(err: unknown): string {
-  if (err instanceof ConfluenceApiError) {
-    return `Confluence API error ${err.statusCode}: ${err.message}${err.data ? "\n" + JSON.stringify(err.data, null, 2) : ""}`;
+  if (err instanceof AtlassianApiError) {
+    return `Atlassian API error ${err.statusCode}: ${err.message}${err.data ? "\n" + JSON.stringify(err.data, null, 2) : ""}`;
   }
   if (err instanceof Error) return err.message;
   return String(err);
@@ -29,11 +38,11 @@ function formatError(err: unknown): string {
 // ── Server setup ───────────────────────────────────────────────────
 
 const server = new McpServer({
-  name: "confluence",
-  version: "0.1.0",
+  name: "atlassian",
+  version: "0.2.0",
 });
 
-// ── Tools ──────────────────────────────────────────────────────────
+// ── Confluence tools ───────────────────────────────────────────────
 
 server.tool(
   "confluence_auth",
@@ -41,7 +50,7 @@ server.tool(
   {},
   async () => {
     try {
-      const spaces = await getClient().verifyConnection();
+      const spaces = await getConfluenceClient().verifyConnection();
       const text = [
         "Connected successfully.",
         `Found ${spaces.length} space(s):`,
@@ -60,7 +69,7 @@ server.tool(
   { limit: z.number().optional().describe("Max number of spaces to return (default 25)") },
   async ({ limit }) => {
     try {
-      const spaces = await getClient().listSpaces(limit ?? 25);
+      const spaces = await getConfluenceClient().listSpaces(limit ?? 25);
       const text = spaces
         .map((s) => `${s.name} [${s.key}] (id: ${s.id}, ${s.status})`)
         .join("\n");
@@ -77,7 +86,7 @@ server.tool(
   { pageId: z.string().describe("The Confluence page ID") },
   async ({ pageId }) => {
     try {
-      const page = await getClient().getPage(pageId);
+      const page = await getConfluenceClient().getPage(pageId);
       const text = [
         `Title: ${page.title}`,
         `ID: ${page.id}`,
@@ -105,7 +114,7 @@ server.tool(
   },
   async ({ spaceKey, title, limit }) => {
     try {
-      const pages = await getClient().searchPages({ spaceKey, title, limit });
+      const pages = await getConfluenceClient().searchPages({ spaceKey, title, limit });
       if (pages.length === 0) {
         return { content: [{ type: "text", text: "No pages found." }] };
       }
@@ -131,7 +140,7 @@ server.tool(
   },
   async ({ spaceKey, title, body, parentId, draft }) => {
     try {
-      const client = getClient();
+      const client = getConfluenceClient();
       const space = await client.getSpaceByKey(spaceKey);
       const resolvedBody = await resolveBody(body);
 
@@ -143,13 +152,14 @@ server.tool(
         status: draft ? "draft" : "current",
       });
 
+      const baseUrl = process.env.ATLASSIAN_URL ?? process.env.CONFLUENCE_URL?.replace(/\/wiki\/?$/, "") ?? "";
       const text = [
         `✓ Page created successfully.`,
         `  Title:  ${page.title}`,
         `  ID:     ${page.id}`,
         `  Space:  ${space.name} [${space.key}]`,
         `  Status: ${page.status}`,
-        `  URL:    ${process.env.CONFLUENCE_URL}/pages/${page.id}`,
+        `  URL:    ${baseUrl}/wiki/pages/${page.id}`,
       ].join("\n");
       return { content: [{ type: "text", text }] };
     } catch (err) {
@@ -170,19 +180,20 @@ server.tool(
   async ({ pageId, title, body, versionMessage }) => {
     try {
       const resolvedBody = body ? await resolveBody(body) : undefined;
-      const page = await getClient().updatePage({
+      const page = await getConfluenceClient().updatePage({
         pageId,
         title,
         body: resolvedBody,
         versionMessage,
       });
 
+      const baseUrl = process.env.ATLASSIAN_URL ?? process.env.CONFLUENCE_URL?.replace(/\/wiki\/?$/, "") ?? "";
       const text = [
         `✓ Page updated successfully.`,
         `  Title:   ${page.title}`,
         `  ID:      ${page.id}`,
         `  Version: ${page.version.number}`,
-        `  URL:     ${process.env.CONFLUENCE_URL}/pages/${page.id}`,
+        `  URL:     ${baseUrl}/wiki/pages/${page.id}`,
       ].join("\n");
       return { content: [{ type: "text", text }] };
     } catch (err) {
@@ -197,13 +208,241 @@ server.tool(
   { pageId: z.string().describe("The page ID to delete") },
   async ({ pageId }) => {
     try {
-      // Fetch page info first so we can report what was deleted
-      const page = await getClient().getPage(pageId);
-      await getClient().deletePage(pageId);
+      const client = getConfluenceClient();
+      const page = await client.getPage(pageId);
+      await client.deletePage(pageId);
 
       return {
         content: [
           { type: "text", text: `✓ Deleted page "${page.title}" (id: ${pageId})` },
+        ],
+      };
+    } catch (err) {
+      return { content: [{ type: "text", text: formatError(err) }], isError: true };
+    }
+  },
+);
+
+// ── Jira tools ─────────────────────────────────────────────────────
+
+server.tool(
+  "jira_auth",
+  "Verify the Jira connection and list accessible projects",
+  {},
+  async () => {
+    try {
+      const projects = await getJiraClient().verifyConnection();
+      const text = [
+        "Connected successfully.",
+        `Found ${projects.length} project(s):`,
+        ...projects.map((p) => `• ${p.name} [${p.key}] (id: ${p.id})`),
+      ].join("\n");
+      return { content: [{ type: "text", text }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: formatError(err) }], isError: true };
+    }
+  },
+);
+
+server.tool(
+  "jira_list_projects",
+  "List available Jira projects",
+  { limit: z.number().optional().describe("Max number of projects to return (default 25)") },
+  async ({ limit }) => {
+    try {
+      const projects = await getJiraClient().listProjects(limit ?? 25);
+      const text = projects
+        .map((p) => `${p.name} [${p.key}] (id: ${p.id})`)
+        .join("\n");
+      return { content: [{ type: "text", text: text || "No projects found." }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: formatError(err) }], isError: true };
+    }
+  },
+);
+
+server.tool(
+  "jira_get_issue",
+  "Get a Jira issue by key, returning summary, status, assignee, and description",
+  { issueKey: z.string().describe("The issue key (e.g. 'PROJ-123')") },
+  async ({ issueKey }) => {
+    try {
+      const client = getJiraClient();
+      const issue = await client.getIssue(issueKey);
+      const desc = client.descriptionToText(issue);
+      const baseUrl = process.env.ATLASSIAN_URL ?? process.env.CONFLUENCE_URL?.replace(/\/wiki\/?$/, "") ?? "";
+      const text = [
+        `Key: ${issue.key}`,
+        `Summary: ${issue.fields.summary}`,
+        `Type: ${issue.fields.issuetype.name}`,
+        `Status: ${issue.fields.status.name}`,
+        `Priority: ${issue.fields.priority?.name ?? "—"}`,
+        `Assignee: ${issue.fields.assignee?.displayName ?? "Unassigned"}`,
+        `Reporter: ${issue.fields.reporter?.displayName ?? "—"}`,
+        `Labels: ${issue.fields.labels?.join(", ") || "—"}`,
+        `Created: ${issue.fields.created}`,
+        `Updated: ${issue.fields.updated}`,
+        `URL: ${baseUrl}/browse/${issue.key}`,
+        "",
+        "--- Description ---",
+        desc || "(empty)",
+      ].join("\n");
+      return { content: [{ type: "text", text }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: formatError(err) }], isError: true };
+    }
+  },
+);
+
+server.tool(
+  "jira_search_issues",
+  "Search for Jira issues using JQL or filters",
+  {
+    jql: z.string().optional().describe("Raw JQL query (overrides other filters)"),
+    project: z.string().optional().describe("Filter by project key"),
+    status: z.string().optional().describe("Filter by status name"),
+    assignee: z.string().optional().describe("Filter by assignee name"),
+    type: z.string().optional().describe("Filter by issue type (Bug, Task, Story, etc.)"),
+    limit: z.number().optional().describe("Max results (default 25)"),
+  },
+  async ({ jql, project, status, assignee, type, limit }) => {
+    try {
+      const issues = await getJiraClient().searchIssues({
+        jql, project, status, assignee, type, limit,
+      });
+      if (issues.length === 0) {
+        return { content: [{ type: "text", text: "No issues found." }] };
+      }
+      const text = issues
+        .map((i) => `${i.key} — ${i.fields.summary} [${i.fields.status.name}] (${i.fields.issuetype.name}, ${i.fields.assignee?.displayName ?? "Unassigned"})`)
+        .join("\n");
+      return { content: [{ type: "text", text }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: formatError(err) }], isError: true };
+    }
+  },
+);
+
+server.tool(
+  "jira_create_issue",
+  "Create a new Jira issue. IMPORTANT: Ask the user for confirmation before calling this tool.",
+  {
+    projectKey: z.string().describe("The project key (e.g. 'PROJ')"),
+    issueType: z.string().describe("Issue type (Bug, Task, Story, Epic, etc.)"),
+    summary: z.string().describe("Issue summary/title"),
+    description: z.string().optional().describe("Issue description (plain text)"),
+    priority: z.string().optional().describe("Priority (Highest, High, Medium, Low, Lowest)"),
+    labels: z.array(z.string()).optional().describe("Labels to apply"),
+  },
+  async ({ projectKey, issueType, summary, description, priority, labels }) => {
+    try {
+      const client = getJiraClient();
+      const issue = await client.createIssue({
+        projectKey, issueType, summary, description, priority, labels,
+      });
+
+      const baseUrl = process.env.ATLASSIAN_URL ?? process.env.CONFLUENCE_URL?.replace(/\/wiki\/?$/, "") ?? "";
+      const text = [
+        `✓ Issue created successfully.`,
+        `  Key:     ${issue.key}`,
+        `  Summary: ${issue.fields.summary}`,
+        `  Type:    ${issue.fields.issuetype.name}`,
+        `  Status:  ${issue.fields.status.name}`,
+        `  URL:     ${baseUrl}/browse/${issue.key}`,
+      ].join("\n");
+      return { content: [{ type: "text", text }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: formatError(err) }], isError: true };
+    }
+  },
+);
+
+server.tool(
+  "jira_update_issue",
+  "Update an existing Jira issue. IMPORTANT: Ask the user for confirmation before calling this tool.",
+  {
+    issueKey: z.string().describe("The issue key to update (e.g. 'PROJ-123')"),
+    summary: z.string().optional().describe("New summary/title"),
+    description: z.string().optional().describe("New description (plain text)"),
+    priority: z.string().optional().describe("New priority"),
+    labels: z.array(z.string()).optional().describe("New labels (replaces existing)"),
+  },
+  async ({ issueKey, summary, description, priority, labels }) => {
+    try {
+      const client = getJiraClient();
+      const issue = await client.updateIssue({
+        issueKey, summary, description, priority, labels,
+      });
+
+      const baseUrl = process.env.ATLASSIAN_URL ?? process.env.CONFLUENCE_URL?.replace(/\/wiki\/?$/, "") ?? "";
+      const text = [
+        `✓ Issue updated successfully.`,
+        `  Key:     ${issue.key}`,
+        `  Summary: ${issue.fields.summary}`,
+        `  Status:  ${issue.fields.status.name}`,
+        `  URL:     ${baseUrl}/browse/${issue.key}`,
+      ].join("\n");
+      return { content: [{ type: "text", text }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: formatError(err) }], isError: true };
+    }
+  },
+);
+
+server.tool(
+  "jira_transition_issue",
+  "Transition a Jira issue to a new status. IMPORTANT: Ask the user for confirmation before calling this tool.",
+  {
+    issueKey: z.string().describe("The issue key (e.g. 'PROJ-123')"),
+    transitionName: z.string().optional().describe("Target transition name (omit to list available transitions)"),
+  },
+  async ({ issueKey, transitionName }) => {
+    try {
+      const client = getJiraClient();
+      const transitions = await client.getTransitions(issueKey);
+
+      if (!transitionName) {
+        const text = [
+          `Available transitions for ${issueKey}:`,
+          ...transitions.map((t) => `• ${t.name} → ${t.to.name} (id: ${t.id})`),
+        ].join("\n");
+        return { content: [{ type: "text", text }] };
+      }
+
+      const match = transitions.find(
+        (t) => t.name.toLowerCase() === transitionName.toLowerCase(),
+      );
+      if (!match) {
+        const available = transitions.map((t) => `${t.name} → ${t.to.name}`).join(", ");
+        return {
+          content: [{ type: "text", text: `No transition named "${transitionName}". Available: ${available}` }],
+          isError: true,
+        };
+      }
+
+      await client.transitionIssue(issueKey, match.id);
+      return {
+        content: [{ type: "text", text: `✓ Transitioned ${issueKey} → ${match.to.name}` }],
+      };
+    } catch (err) {
+      return { content: [{ type: "text", text: formatError(err) }], isError: true };
+    }
+  },
+);
+
+server.tool(
+  "jira_delete_issue",
+  "Delete a Jira issue. IMPORTANT: Ask the user for confirmation before calling this tool.",
+  { issueKey: z.string().describe("The issue key to delete (e.g. 'PROJ-123')") },
+  async ({ issueKey }) => {
+    try {
+      const client = getJiraClient();
+      const issue = await client.getIssue(issueKey);
+      await client.deleteIssue(issueKey);
+
+      return {
+        content: [
+          { type: "text", text: `✓ Deleted issue ${issueKey} "${issue.fields.summary}"` },
         ],
       };
     } catch (err) {
@@ -217,7 +456,7 @@ server.tool(
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("Confluence MCP server running on stdio");
+  console.error("Atlassian MCP server running on stdio");
 }
 
 main().catch((err) => {
