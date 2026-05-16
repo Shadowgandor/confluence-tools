@@ -7,6 +7,7 @@ import {
   ConfluenceSpace,
   ConfluenceAttachment,
   ConfluenceLabel,
+  ConfluenceComment,
   AttachmentUploadInput,
   PageCreateInput,
   PageUpdateInput,
@@ -194,6 +195,31 @@ export class ConfluenceClient {
       `/api/v2/pages/${pageId}/attachments`,
     );
     return result.results;
+  }
+
+  // ── Comments ─────────────────────────────────────────────────────
+
+  async listComments(pageId: string, limit = 25): Promise<ConfluenceComment[]> {
+    const params = new URLSearchParams({
+      expand: "body.storage,history",
+      limit: String(limit),
+    });
+    const result = await this.http.request<{ results: ConfluenceComment[] }>(
+      `/rest/api/content/${pageId}/child/comment?${params.toString()}`,
+    );
+    return result.results;
+  }
+
+  async addComment(pageId: string, text: string): Promise<ConfluenceComment> {
+    const payload = {
+      type: "comment",
+      container: { id: pageId, type: "page" },
+      body: { storage: { value: text, representation: "storage" } },
+    };
+    return this.http.request<ConfluenceComment>("/rest/api/content", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
   }
 
   // ── Labels ───────────────────────────────────────────────────────

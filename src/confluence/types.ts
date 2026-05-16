@@ -57,3 +57,12 @@ export interface ConfluenceLabel {
   name: string;
   prefix: string;
 }
+
+export interface ConfluenceComment {
+  id: string;
+  body?: { storage?: { value: string } };
+  history?: {
+    createdDate: string;
+    createdBy?: { displayName: string };
+  };
+}

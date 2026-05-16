@@ -191,6 +191,48 @@ export function registerConfluenceCommands(program: Command) {
     });
 
   confluence
+    .command("comments <pageId>")
+    .description("List comments on a page")
+    .option("-l, --limit <n>", "Max results", "25")
+    .action(async (pageId: string, opts) => {
+      try {
+        const comments = await createClient().listComments(pageId, Number(opts.limit));
+        if (comments.length === 0) {
+          console.log(chalk.yellow("No comments."));
+          return;
+        }
+        for (const c of comments) {
+          const author = c.history?.createdBy?.displayName ?? "Unknown";
+          const date = c.history?.createdDate ? new Date(c.history.createdDate).toLocaleDateString() : "";
+          console.log(chalk.dim(`─`.repeat(60)));
+          console.log(`${chalk.bold(author)}${date ? chalk.dim(` · ${date}`) : ""}`);
+          console.log(c.body?.storage?.value ?? "");
+        }
+      } catch (err) {
+        handleError(err);
+      }
+    });
+
+  confluence
+    .command("comment <pageId>")
+    .description("Add a comment to a page")
+    .requiredOption("-t, --text <text>", "Comment text")
+    .option("-y, --yes", "Skip confirmation prompt")
+    .action(async (pageId: string, opts) => {
+      try {
+        if (!opts.yes) {
+          const ok = await confirm(`Add comment to page ${pageId}?`);
+          if (!ok) { console.log(chalk.dim("Cancelled.")); return; }
+        }
+        const body = opts.text.trimStart().startsWith("<") ? opts.text : `<p>${opts.text}</p>`;
+        await createClient().addComment(pageId, body);
+        console.log(chalk.green("✓ Comment added."));
+      } catch (err) {
+        handleError(err);
+      }
+    });
+
+  confluence
     .command("labels <pageId>")
     .description("List labels on a page")
     .action(async (pageId: string) => {

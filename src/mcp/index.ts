@@ -224,6 +224,50 @@ server.tool(
 );
 
 server.tool(
+  "confluence_list_comments",
+  "List comments on a Confluence page",
+  {
+    pageId: z.string().describe("The Confluence page ID"),
+    limit: z.number().optional().describe("Max results (default 25)"),
+  },
+  async ({ pageId, limit }) => {
+    try {
+      const comments = await getConfluenceClient().listComments(pageId, limit ?? 25);
+      if (comments.length === 0) {
+        return { content: [{ type: "text", text: "No comments." }] };
+      }
+      const text = comments.map((c) => {
+        const author = c.history?.createdBy?.displayName ?? "Unknown";
+        const date = c.history?.createdDate ? new Date(c.history.createdDate).toLocaleDateString() : "";
+        const body = c.body?.storage?.value ?? "";
+        return `[${author}${date ? ` · ${date}` : ""}]\n${body}`;
+      }).join("\n\n");
+      return { content: [{ type: "text", text }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: formatError(err) }], isError: true };
+    }
+  },
+);
+
+server.tool(
+  "confluence_add_comment",
+  "Add a comment to a Confluence page. IMPORTANT: Ask the user for confirmation before calling this tool.",
+  {
+    pageId: z.string().describe("The Confluence page ID"),
+    text: z.string().describe("Comment text (plain text or Confluence storage format XHTML)"),
+  },
+  async ({ pageId, text }) => {
+    try {
+      const body = text.trimStart().startsWith("<") ? text : `<p>${text}</p>`;
+      await getConfluenceClient().addComment(pageId, body);
+      return { content: [{ type: "text", text: "✓ Comment added." }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: formatError(err) }], isError: true };
+    }
+  },
+);
+
+server.tool(
   "confluence_list_labels",
   "List labels on a Confluence page",
   { pageId: z.string().describe("The Confluence page ID") },
