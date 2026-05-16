@@ -81,3 +81,17 @@ export interface JiraComment {
   created: string;
   updated?: string;
 }
+
+export interface JiraLinkType {
+  id: string;
+  name: string;
+  inward: string;
+  outward: string;
+}
+
+export interface JiraIssueLink {
+  id: string;
+  type: { id: string; name: string; inward: string; outward: string };
+  inwardIssue?: { id: string; key: string; fields: { summary: string; status: { name: string } } };
+  outwardIssue?: { id: string; key: string; fields: { summary: string; status: { name: string } } };
+}

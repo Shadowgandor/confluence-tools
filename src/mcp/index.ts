@@ -626,6 +626,81 @@ server.tool(
 );
 
 server.tool(
+  "jira_list_link_types",
+  "List available Jira issue link types (e.g. Blocks, Clones, Relates)",
+  {},
+  async () => {
+    try {
+      const types = await getJiraClient().listIssueLinkTypes();
+      const text = types
+        .map((t) => `${t.name} — outward: "${t.outward}", inward: "${t.inward}"`)
+        .join("\n");
+      return { content: [{ type: "text", text: text || "No link types found." }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: formatError(err) }], isError: true };
+    }
+  },
+);
+
+server.tool(
+  "jira_list_issue_links",
+  "List links on a Jira issue",
+  { issueKey: z.string().describe("The issue key (e.g. 'PROJ-123')") },
+  async ({ issueKey }) => {
+    try {
+      const links = await getJiraClient().listIssueLinks(issueKey);
+      if (links.length === 0) {
+        return { content: [{ type: "text", text: "No issue links." }] };
+      }
+      const text = links.map((l) => {
+        if (l.outwardIssue) {
+          return `${l.type.outward}: ${l.outwardIssue.key} — ${l.outwardIssue.fields.summary} [${l.outwardIssue.fields.status.name}] (link id: ${l.id})`;
+        }
+        if (l.inwardIssue) {
+          return `${l.type.inward}: ${l.inwardIssue.key} — ${l.inwardIssue.fields.summary} [${l.inwardIssue.fields.status.name}] (link id: ${l.id})`;
+        }
+        return `${l.type.name} (link id: ${l.id})`;
+      }).join("\n");
+      return { content: [{ type: "text", text }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: formatError(err) }], isError: true };
+    }
+  },
+);
+
+server.tool(
+  "jira_link_issues",
+  "Link two Jira issues together. IMPORTANT: Ask the user for confirmation before calling this tool.",
+  {
+    issueKey: z.string().describe("The source issue key (outward side, e.g. 'PROJ-1')"),
+    linkType: z.string().describe("Link type name (e.g. 'Blocks', 'Clones', 'Relates to') — use jira_list_link_types to see options"),
+    targetIssueKey: z.string().describe("The target issue key (inward side, e.g. 'PROJ-2')"),
+  },
+  async ({ issueKey, linkType, targetIssueKey }) => {
+    try {
+      await getJiraClient().linkIssues(issueKey, linkType, targetIssueKey);
+      return { content: [{ type: "text", text: `✓ Linked: ${issueKey} "${linkType}" ${targetIssueKey}` }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: formatError(err) }], isError: true };
+    }
+  },
+);
+
+server.tool(
+  "jira_remove_issue_link",
+  "Remove a link between two Jira issues. IMPORTANT: Ask the user for confirmation before calling this tool.",
+  { linkId: z.string().describe("The link ID to remove (from jira_list_issue_links)") },
+  async ({ linkId }) => {
+    try {
+      await getJiraClient().removeIssueLink(linkId);
+      return { content: [{ type: "text", text: `✓ Link ${linkId} removed.` }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: formatError(err) }], isError: true };
+    }
+  },
+);
+
+server.tool(
   "jira_list_comments",
   "List comments on a Jira issue",
   { issueKey: z.string().describe("The issue key (e.g. 'PROJ-123')") },

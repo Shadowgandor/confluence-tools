@@ -259,6 +259,61 @@ export function registerJiraCommands(program: Command) {
     });
 
   jira
+    .command("links <issueKey>")
+    .description("List links on an issue")
+    .action(async (issueKey: string) => {
+      try {
+        const links = await createClient().listIssueLinks(issueKey);
+        if (links.length === 0) {
+          console.log(chalk.yellow("No issue links."));
+          return;
+        }
+        for (const l of links) {
+          if (l.outwardIssue) {
+            console.log(`  ${chalk.dim(l.type.outward)} ${chalk.bold(l.outwardIssue.key)} ${l.outwardIssue.fields.summary} ${chalk.dim(`[${l.outwardIssue.fields.status.name}]`)}`);
+          } else if (l.inwardIssue) {
+            console.log(`  ${chalk.dim(l.type.inward)} ${chalk.bold(l.inwardIssue.key)} ${l.inwardIssue.fields.summary} ${chalk.dim(`[${l.inwardIssue.fields.status.name}]`)}`);
+          }
+        }
+      } catch (err) {
+        handleError(err);
+      }
+    });
+
+  jira
+    .command("link <issueKey>")
+    .description("Link an issue to another")
+    .requiredOption("--type <name>", "Link type (e.g. 'Blocks', 'Relates to')")
+    .requiredOption("--target <key>", "Target issue key")
+    .option("-y, --yes", "Skip confirmation prompt")
+    .action(async (issueKey: string, opts) => {
+      try {
+        if (!opts.yes) {
+          const ok = await confirm(`Link ${issueKey} "${opts.type}" ${opts.target}?`);
+          if (!ok) { console.log(chalk.dim("Cancelled.")); return; }
+        }
+        await createClient().linkIssues(issueKey, opts.type, opts.target);
+        console.log(chalk.green(`✓ Linked: ${issueKey} "${opts.type}" ${opts.target}`));
+      } catch (err) {
+        handleError(err);
+      }
+    });
+
+  jira
+    .command("link-types")
+    .description("List available issue link types")
+    .action(async () => {
+      try {
+        const types = await createClient().listIssueLinkTypes();
+        for (const t of types) {
+          console.log(`${chalk.bold(t.name)} ${chalk.dim(`— outward: "${t.outward}", inward: "${t.inward}"`)}`);
+        }
+      } catch (err) {
+        handleError(err);
+      }
+    });
+
+  jira
     .command("comments <issueKey>")
     .description("List comments on an issue")
     .action(async (issueKey: string) => {

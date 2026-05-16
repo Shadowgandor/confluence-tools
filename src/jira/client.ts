@@ -8,6 +8,8 @@ import {
   JiraAttachment,
   JiraAttachmentUploadInput,
   JiraComment,
+  JiraLinkType,
+  JiraIssueLink,
   JiraTransition,
   IssueCreateInput,
   IssueUpdateInput,
@@ -159,6 +161,39 @@ export class JiraClient {
       `/rest/api/3/issue/${encodeURIComponent(issueKey)}`,
       { method: "DELETE" },
     );
+  }
+
+  // ── Issue links ──────────────────────────────────────────────────
+
+  async listIssueLinkTypes(): Promise<JiraLinkType[]> {
+    const result = await this.http.request<{ issueLinkTypes: JiraLinkType[] }>(
+      "/rest/api/3/issueLinkType",
+    );
+    return result.issueLinkTypes;
+  }
+
+  async listIssueLinks(issueKey: string): Promise<JiraIssueLink[]> {
+    const result = await this.http.request<{ fields: { issuelinks: JiraIssueLink[] } }>(
+      `/rest/api/3/issue/${encodeURIComponent(issueKey)}?fields=issuelinks`,
+    );
+    return result.fields.issuelinks ?? [];
+  }
+
+  async linkIssues(outwardIssueKey: string, linkTypeName: string, inwardIssueKey: string): Promise<void> {
+    await this.http.request<void>("/rest/api/3/issueLink", {
+      method: "POST",
+      body: JSON.stringify({
+        type: { name: linkTypeName },
+        outwardIssue: { key: outwardIssueKey },
+        inwardIssue: { key: inwardIssueKey },
+      }),
+    });
+  }
+
+  async removeIssueLink(linkId: string): Promise<void> {
+    await this.http.request<void>(`/rest/api/3/issueLink/${encodeURIComponent(linkId)}`, {
+      method: "DELETE",
+    });
   }
 
   // ── Comments ─────────────────────────────────────────────────────
