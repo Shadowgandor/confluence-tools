@@ -191,6 +191,60 @@ export function registerConfluenceCommands(program: Command) {
     });
 
   confluence
+    .command("labels <pageId>")
+    .description("List labels on a page")
+    .action(async (pageId: string) => {
+      try {
+        const labels = await createClient().listLabels(pageId);
+        if (labels.length === 0) {
+          console.log(chalk.yellow("No labels."));
+          return;
+        }
+        console.log(labels.map((l) => chalk.bold(l.name)).join("  "));
+      } catch (err) {
+        handleError(err);
+      }
+    });
+
+  confluence
+    .command("add-label <pageId> [labels...]")
+    .description("Add one or more labels to a page")
+    .option("-y, --yes", "Skip confirmation prompt")
+    .action(async (pageId: string, labels: string[], opts) => {
+      try {
+        if (labels.length === 0) {
+          console.error(chalk.red("Specify at least one label."));
+          process.exit(1);
+        }
+        if (!opts.yes) {
+          const ok = await confirm(`Add labels [${labels.join(", ")}] to page ${pageId}?`);
+          if (!ok) { console.log(chalk.dim("Cancelled.")); return; }
+        }
+        const result = await createClient().addLabels(pageId, labels);
+        console.log(chalk.green(`✓ Labels: ${result.map((l) => l.name).join(", ")}`));
+      } catch (err) {
+        handleError(err);
+      }
+    });
+
+  confluence
+    .command("remove-label <pageId> <label>")
+    .description("Remove a label from a page")
+    .option("-y, --yes", "Skip confirmation prompt")
+    .action(async (pageId: string, label: string, opts) => {
+      try {
+        if (!opts.yes) {
+          const ok = await confirm(`Remove label "${label}" from page ${pageId}?`);
+          if (!ok) { console.log(chalk.dim("Cancelled.")); return; }
+        }
+        await createClient().removeLabel(pageId, label);
+        console.log(chalk.green(`✓ Removed label "${label}"`));
+      } catch (err) {
+        handleError(err);
+      }
+    });
+
+  confluence
     .command("children <pageId>")
     .description("List child pages of a page")
     .option("-l, --limit <n>", "Max results", "25")

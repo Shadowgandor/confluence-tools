@@ -6,6 +6,7 @@ import {
   ConfluencePage,
   ConfluenceSpace,
   ConfluenceAttachment,
+  ConfluenceLabel,
   AttachmentUploadInput,
   PageCreateInput,
   PageUpdateInput,
@@ -193,6 +194,31 @@ export class ConfluenceClient {
       `/api/v2/pages/${pageId}/attachments`,
     );
     return result.results;
+  }
+
+  // ── Labels ───────────────────────────────────────────────────────
+
+  async listLabels(pageId: string): Promise<ConfluenceLabel[]> {
+    const result = await this.http.request<{ results: ConfluenceLabel[] }>(
+      `/rest/api/content/${pageId}/label`,
+    );
+    return result.results;
+  }
+
+  async addLabels(pageId: string, labels: string[]): Promise<ConfluenceLabel[]> {
+    const payload = labels.map((name) => ({ prefix: "global", name }));
+    const result = await this.http.request<{ results: ConfluenceLabel[] }>(
+      `/rest/api/content/${pageId}/label`,
+      { method: "POST", body: JSON.stringify(payload) },
+    );
+    return result.results;
+  }
+
+  async removeLabel(pageId: string, label: string): Promise<void> {
+    await this.http.request<void>(
+      `/rest/api/content/${pageId}/label/${encodeURIComponent(label)}`,
+      { method: "DELETE" },
+    );
   }
 
   // ── Children ──────────────────────────────────────────────────────

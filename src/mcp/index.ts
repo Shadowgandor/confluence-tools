@@ -224,6 +224,58 @@ server.tool(
 );
 
 server.tool(
+  "confluence_list_labels",
+  "List labels on a Confluence page",
+  { pageId: z.string().describe("The Confluence page ID") },
+  async ({ pageId }) => {
+    try {
+      const labels = await getConfluenceClient().listLabels(pageId);
+      if (labels.length === 0) {
+        return { content: [{ type: "text", text: "No labels." }] };
+      }
+      return { content: [{ type: "text", text: labels.map((l) => l.name).join(", ") }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: formatError(err) }], isError: true };
+    }
+  },
+);
+
+server.tool(
+  "confluence_add_labels",
+  "Add labels to a Confluence page. IMPORTANT: Ask the user for confirmation before calling this tool.",
+  {
+    pageId: z.string().describe("The Confluence page ID"),
+    labels: z.array(z.string()).describe("Label names to add"),
+  },
+  async ({ pageId, labels }) => {
+    try {
+      const result = await getConfluenceClient().addLabels(pageId, labels);
+      const text = `✓ Added labels: ${result.map((l) => l.name).join(", ")}`;
+      return { content: [{ type: "text", text }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: formatError(err) }], isError: true };
+    }
+  },
+);
+
+server.tool(
+  "confluence_remove_label",
+  "Remove a label from a Confluence page. IMPORTANT: Ask the user for confirmation before calling this tool.",
+  {
+    pageId: z.string().describe("The Confluence page ID"),
+    label: z.string().describe("Label name to remove"),
+  },
+  async ({ pageId, label }) => {
+    try {
+      await getConfluenceClient().removeLabel(pageId, label);
+      return { content: [{ type: "text", text: `✓ Removed label "${label}"` }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: formatError(err) }], isError: true };
+    }
+  },
+);
+
+server.tool(
   "confluence_list_child_pages",
   "List child pages of a Confluence page",
   {

@@ -51,3 +51,9 @@ export interface AttachmentUploadInput {
   filePath: string;
   comment?: string;
 }
+
+export interface ConfluenceLabel {
+  id: string;
+  name: string;
+  prefix: string;
+}
