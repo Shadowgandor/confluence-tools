@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest"; // vi not needed yet
 import { loadConfigFromEnv } from "./auth.js";
 
 describe("loadConfigFromEnv", () => {
@@ -107,5 +107,9 @@ describe("loadConfigFromEnv", () => {
   it("does not reveal the token value in error output", () => {
     process.env.ATLASSIAN_TOKEN = "secret-token";
     expect(() => loadConfigFromEnv()).not.toThrow("secret-token");
+  });
+
+  it("error message mentions config file as an alternative", () => {
+    expect(() => loadConfigFromEnv()).toThrow(/config\.json/);
   });
 });
