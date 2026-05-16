@@ -9,6 +9,8 @@ import {
   JiraUser,
   JiraBoard,
   JiraSprint,
+  JiraSprintInput,
+  JiraSprintUpdateInput,
   JiraAttachment,
   JiraAttachmentUploadInput,
   JiraComment,
@@ -94,6 +96,37 @@ export class JiraClient {
       method: "POST",
       body: JSON.stringify({ issues: issueKeys }),
     });
+  }
+
+  async createSprint(input: JiraSprintInput): Promise<JiraSprint> {
+    const payload: Record<string, unknown> = {
+      name: input.name,
+      originBoardId: input.boardId,
+    };
+    if (input.goal) payload.goal = input.goal;
+    if (input.startDate) payload.startDate = input.startDate;
+    if (input.endDate) payload.endDate = input.endDate;
+    return this.http.request<JiraSprint>("/rest/agile/1.0/sprint", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async updateSprint(sprintId: number, input: JiraSprintUpdateInput): Promise<JiraSprint> {
+    return this.http.request<JiraSprint>(`/rest/agile/1.0/sprint/${sprintId}`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  }
+
+  async closeSprint(sprintId: number): Promise<JiraSprint> {
+    return this.updateSprint(sprintId, { state: "closed" });
+  }
+
+  // ── Subtasks ─────────────────────────────────────────────────────
+
+  async listSubtasks(issueKey: string, limit = 50): Promise<JiraIssue[]> {
+    return this.searchIssues({ jql: `parent = "${issueKey}"`, limit });
   }
 
   // ── Users ────────────────────────────────────────────────────────

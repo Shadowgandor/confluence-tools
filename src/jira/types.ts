@@ -135,3 +135,19 @@ export interface JiraSprint {
   endDate?: string;
   goal?: string;
 }
+
+export interface JiraSprintInput {
+  boardId: number;
+  name: string;
+  goal?: string;
+  startDate?: string;
+  endDate?: string;
+}
+
+export interface JiraSprintUpdateInput {
+  name?: string;
+  goal?: string;
+  startDate?: string;
+  endDate?: string;
+  state?: "active" | "closed";
+}
