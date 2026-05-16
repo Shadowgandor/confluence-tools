@@ -1,14 +1,38 @@
+import { readFile } from "fs/promises";
+import { basename, extname } from "path";
 import { AtlassianClient } from "../core/client.js";
 import { AtlassianConfig } from "../core/types.js";
 import {
   JiraProject,
   JiraIssue,
+  JiraAttachment,
+  JiraAttachmentUploadInput,
   JiraTransition,
   IssueCreateInput,
   IssueUpdateInput,
   IssueSearchOptions,
 } from "./types.js";
 import { textToAdf, adfToText, buildJql } from "./helpers.js";
+
+function attachmentMimeType(filePath: string): string {
+  const map: Record<string, string> = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+    ".svg": "image/svg+xml",
+    ".pdf": "application/pdf",
+    ".zip": "application/zip",
+    ".txt": "text/plain",
+    ".csv": "text/csv",
+    ".json": "application/json",
+    ".xml": "application/xml",
+    ".html": "text/html",
+    ".md": "text/markdown",
+  };
+  return map[extname(filePath).toLowerCase()] ?? "application/octet-stream";
+}
 
 interface JiraSearchResponse {
   issues: JiraIssue[];
@@ -133,6 +157,36 @@ export class JiraClient {
       `/rest/api/3/issue/${encodeURIComponent(issueKey)}`,
       { method: "DELETE" },
     );
+  }
+
+  // ── Attachments ──────────────────────────────────────────────────
+
+  async uploadAttachment(input: JiraAttachmentUploadInput): Promise<JiraAttachment> {
+    const { issueKey, filePath } = input;
+    const fileBuffer = await readFile(filePath);
+    const fileName = basename(filePath);
+    const blob = new Blob([fileBuffer], { type: attachmentMimeType(filePath) });
+
+    const formData = new FormData();
+    formData.append("file", blob, fileName);
+
+    const results = await this.http.request<JiraAttachment[]>(
+      `/rest/api/3/issue/${encodeURIComponent(issueKey)}/attachments`,
+      {
+        method: "POST",
+        body: formData,
+        headers: { "X-Atlassian-Token": "no-check" },
+      },
+    );
+
+    return results[0];
+  }
+
+  async listAttachments(issueKey: string): Promise<JiraAttachment[]> {
+    const result = await this.http.request<{ fields: { attachment: JiraAttachment[] } }>(
+      `/rest/api/3/issue/${encodeURIComponent(issueKey)}?fields=attachment`,
+    );
+    return result.fields.attachment ?? [];
   }
 
   // ── Helpers ──────────────────────────────────────────────────────

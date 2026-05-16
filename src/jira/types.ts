@@ -57,3 +57,18 @@ export interface IssueSearchOptions {
   type?: string;
   limit?: number;
 }
+
+export interface JiraAttachment {
+  id: string;
+  filename: string;
+  mimeType: string;
+  size: number;
+  content: string;
+  created?: string;
+  author?: { displayName: string };
+}
+
+export interface JiraAttachmentUploadInput {
+  issueKey: string;
+  filePath: string;
+}

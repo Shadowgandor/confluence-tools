@@ -505,6 +505,53 @@ server.tool(
   },
 );
 
+server.tool(
+  "jira_upload_attachment",
+  "Upload a file as an attachment to a Jira issue. IMPORTANT: Ask the user for confirmation before calling this tool.",
+  {
+    issueKey: z.string().describe("The issue key to attach the file to (e.g. 'PROJ-123')"),
+    filePath: z.string().describe("Absolute path to the file to upload"),
+  },
+  async ({ issueKey, filePath }) => {
+    try {
+      const att = await getJiraClient().uploadAttachment({ issueKey, filePath });
+      const baseUrl = process.env.ATLASSIAN_URL ?? process.env.CONFLUENCE_URL?.replace(/\/wiki\/?$/, "") ?? "";
+      const text = [
+        `✓ Attachment uploaded successfully.`,
+        `  File:     ${att.filename}`,
+        `  ID:       ${att.id}`,
+        `  Type:     ${att.mimeType}`,
+        `  Size:     ${att.size} bytes`,
+        ...(att.content ? [`  Download: ${att.content}`] : []),
+        `  Issue:    ${baseUrl}/browse/${issueKey}`,
+      ].join("\n");
+      return { content: [{ type: "text", text }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: formatError(err) }], isError: true };
+    }
+  },
+);
+
+server.tool(
+  "jira_list_attachments",
+  "List all attachments on a Jira issue",
+  { issueKey: z.string().describe("The issue key (e.g. 'PROJ-123')") },
+  async ({ issueKey }) => {
+    try {
+      const attachments = await getJiraClient().listAttachments(issueKey);
+      if (attachments.length === 0) {
+        return { content: [{ type: "text", text: "No attachments found." }] };
+      }
+      const text = attachments
+        .map((a) => `${a.filename} (id: ${a.id}, ${a.mimeType}, ${a.size} bytes)\n  ${a.content}`)
+        .join("\n");
+      return { content: [{ type: "text", text }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: formatError(err) }], isError: true };
+    }
+  },
+);
+
 // ── Start ──────────────────────────────────────────────────────────
 
 async function main() {

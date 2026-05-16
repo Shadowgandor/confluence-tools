@@ -256,6 +256,63 @@ export function registerJiraCommands(program: Command) {
     });
 
   jira
+    .command("attach <issueKey> <file>")
+    .description("Upload a file as an attachment to an issue")
+    .option("-y, --yes", "Skip confirmation prompt")
+    .action(async (issueKey: string, file: string, opts) => {
+      try {
+        const client = createClient();
+        const issue = await client.getIssue(issueKey);
+
+        if (!opts.yes) {
+          console.log(chalk.yellow("⚠ About to attach file to issue:"));
+          console.log(`  Issue: ${chalk.bold(issue.key)} ${issue.fields.summary}`);
+          console.log(`  File:  ${file}`);
+          console.log();
+
+          const ok = await confirm("Proceed?");
+          if (!ok) {
+            console.log(chalk.dim("Cancelled."));
+            return;
+          }
+        }
+
+        const att = await client.uploadAttachment({ issueKey, filePath: file });
+        console.log(chalk.green(`✓ Uploaded: ${chalk.bold(att.filename)} ${chalk.dim(`(id: ${att.id}, ${att.mimeType}, ${att.size} bytes)`)}`));
+        if (att.content) {
+          console.log(`  ${chalk.cyan(att.content)}`);
+        }
+      } catch (err) {
+        handleError(err);
+      }
+    });
+
+  jira
+    .command("attachments <issueKey>")
+    .description("List attachments on an issue")
+    .action(async (issueKey: string) => {
+      try {
+        const client = createClient();
+        const issue = await client.getIssue(issueKey);
+        const attachments = await client.listAttachments(issueKey);
+
+        console.log(`Attachments on ${chalk.bold(issue.key)} ${issue.fields.summary}`);
+        if (attachments.length === 0) {
+          console.log(chalk.yellow("  No attachments."));
+          return;
+        }
+        for (const att of attachments) {
+          console.log(`  ${chalk.bold(att.filename)} ${chalk.dim(`(id: ${att.id}, ${att.mimeType}, ${att.size} bytes)`)}`);
+          if (att.content) {
+            console.log(`    ${chalk.cyan(att.content)}`);
+          }
+        }
+      } catch (err) {
+        handleError(err);
+      }
+    });
+
+  jira
     .command("delete <issueKey>")
     .description("Delete an issue")
     .option("-y, --yes", "Skip confirmation prompt")
