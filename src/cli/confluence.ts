@@ -1,7 +1,7 @@
 import { Command } from "commander";
 import chalk from "chalk";
 import { loadConfigFromEnv } from "../core/auth.js";
-import { resolveBody } from "../core/markdown.js";
+import { resolveBody } from "../confluence/markdown.js";
 import { ConfluenceClient } from "../confluence/client.js";
 import { handleError, confirm } from "./helpers.js";
 

@@ -4,7 +4,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { loadConfigFromEnv, AtlassianApiError } from "../core/index.js";
-import { resolveBody } from "../core/markdown.js";
+import { resolveBody } from "../confluence/markdown.js";
 import { ConfluenceClient } from "../confluence/client.js";
 import { JiraClient } from "../jira/client.js";
 
