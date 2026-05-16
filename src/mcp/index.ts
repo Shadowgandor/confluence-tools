@@ -626,6 +626,29 @@ server.tool(
 );
 
 server.tool(
+  "jira_search_users",
+  "Search for Jira users by name or email — useful for finding accountIds to use with assignee fields",
+  {
+    query: z.string().describe("Name or email to search for"),
+    limit: z.number().optional().describe("Max results (default 10)"),
+  },
+  async ({ query, limit }) => {
+    try {
+      const users = await getJiraClient().searchUsers(query, limit ?? 10);
+      if (users.length === 0) {
+        return { content: [{ type: "text", text: "No users found." }] };
+      }
+      const text = users
+        .map((u) => `${u.displayName}${u.emailAddress ? ` <${u.emailAddress}>` : ""} — accountId: ${u.accountId}${u.active ? "" : " (inactive)"}`)
+        .join("\n");
+      return { content: [{ type: "text", text }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: formatError(err) }], isError: true };
+    }
+  },
+);
+
+server.tool(
   "jira_list_worklogs",
   "List work log entries on a Jira issue",
   { issueKey: z.string().describe("The issue key (e.g. 'PROJ-123')") },

@@ -62,6 +62,28 @@ export function registerJiraCommands(program: Command) {
     });
 
   jira
+    .command("users <query>")
+    .description("Search for users by name or email (to find accountIds for assignee)")
+    .option("-l, --limit <n>", "Max results", "10")
+    .action(async (query: string, opts) => {
+      try {
+        const users = await createClient().searchUsers(query, Number(opts.limit));
+        if (users.length === 0) {
+          console.log(chalk.yellow("No users found."));
+          return;
+        }
+        for (const u of users) {
+          const email = u.emailAddress ? chalk.dim(` <${u.emailAddress}>`) : "";
+          const inactive = u.active ? "" : chalk.red(" (inactive)");
+          console.log(`${chalk.bold(u.displayName)}${email}${inactive}`);
+          console.log(`  ${chalk.dim(`accountId: ${u.accountId}`)}`);
+        }
+      } catch (err) {
+        handleError(err);
+      }
+    });
+
+  jira
     .command("list")
     .description("Search for issues")
     .option("--project <key>", "Filter by project key")

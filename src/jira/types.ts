@@ -111,3 +111,11 @@ export interface WorklogInput {
   started?: string;
   comment?: string;
 }
+
+export interface JiraUser {
+  accountId: string;
+  displayName: string;
+  emailAddress?: string;
+  active: boolean;
+  accountType: string;
+}

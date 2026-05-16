@@ -5,6 +5,7 @@ import { AtlassianConfig } from "../core/types.js";
 import {
   JiraProject,
   JiraIssue,
+  JiraUser,
   JiraAttachment,
   JiraAttachmentUploadInput,
   JiraComment,
@@ -76,6 +77,13 @@ export class JiraClient {
       `/rest/api/3/project/search?maxResults=${limit}`,
     );
     return result.values;
+  }
+
+  // ── Users ────────────────────────────────────────────────────────
+
+  async searchUsers(query: string, limit = 10): Promise<JiraUser[]> {
+    const params = new URLSearchParams({ query, maxResults: String(limit) });
+    return this.http.request<JiraUser[]>(`/rest/api/3/user/search?${params.toString()}`);
   }
 
   // ── Issues ───────────────────────────────────────────────────────
