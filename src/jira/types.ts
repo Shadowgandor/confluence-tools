@@ -119,3 +119,19 @@ export interface JiraUser {
   active: boolean;
   accountType: string;
 }
+
+export interface JiraBoard {
+  id: number;
+  name: string;
+  type: string;
+  location?: { projectKey: string; projectName: string };
+}
+
+export interface JiraSprint {
+  id: number;
+  name: string;
+  state: string;
+  startDate?: string;
+  endDate?: string;
+  goal?: string;
+}

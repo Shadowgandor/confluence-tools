@@ -6,6 +6,8 @@ import {
   JiraProject,
   JiraIssue,
   JiraUser,
+  JiraBoard,
+  JiraSprint,
   JiraAttachment,
   JiraAttachmentUploadInput,
   JiraComment,
@@ -77,6 +79,31 @@ export class JiraClient {
       `/rest/api/3/project/search?maxResults=${limit}`,
     );
     return result.values;
+  }
+
+  // ── Boards & sprints ─────────────────────────────────────────────
+
+  async listBoards(limit = 25): Promise<JiraBoard[]> {
+    const result = await this.http.request<{ values: JiraBoard[] }>(
+      `/rest/agile/1.0/board?maxResults=${limit}`,
+    );
+    return result.values;
+  }
+
+  async listSprints(boardId: number, state?: "active" | "future" | "closed"): Promise<JiraSprint[]> {
+    const params = new URLSearchParams({ maxResults: "50" });
+    if (state) params.set("state", state);
+    const result = await this.http.request<{ values: JiraSprint[] }>(
+      `/rest/agile/1.0/board/${boardId}/sprint?${params.toString()}`,
+    );
+    return result.values;
+  }
+
+  async moveToSprint(sprintId: number, issueKeys: string[]): Promise<void> {
+    await this.http.request<void>(`/rest/agile/1.0/sprint/${sprintId}/issue`, {
+      method: "POST",
+      body: JSON.stringify({ issues: issueKeys }),
+    });
   }
 
   // ── Users ────────────────────────────────────────────────────────

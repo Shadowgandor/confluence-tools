@@ -653,6 +653,69 @@ server.tool(
 );
 
 server.tool(
+  "jira_list_boards",
+  "List Jira boards (Scrum and Kanban)",
+  { limit: z.number().optional().describe("Max results (default 25)") },
+  async ({ limit }) => {
+    try {
+      const boards = await getJiraClient().listBoards(limit ?? 25);
+      if (boards.length === 0) {
+        return { content: [{ type: "text", text: "No boards found." }] };
+      }
+      const text = boards
+        .map((b) => `${b.name} (id: ${b.id}, ${b.type}${b.location ? `, project: ${b.location.projectKey}` : ""})`)
+        .join("\n");
+      return { content: [{ type: "text", text }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: formatError(err) }], isError: true };
+    }
+  },
+);
+
+server.tool(
+  "jira_list_sprints",
+  "List sprints on a Jira board",
+  {
+    boardId: z.number().describe("The board ID (from jira_list_boards)"),
+    state: z.enum(["active", "future", "closed"]).optional().describe("Filter by sprint state (omit to return all)"),
+  },
+  async ({ boardId, state }) => {
+    try {
+      const sprints = await getJiraClient().listSprints(boardId, state);
+      if (sprints.length === 0) {
+        return { content: [{ type: "text", text: "No sprints found." }] };
+      }
+      const text = sprints.map((s) => {
+        const dates = s.startDate && s.endDate
+          ? ` (${new Date(s.startDate).toLocaleDateString()} – ${new Date(s.endDate).toLocaleDateString()})`
+          : "";
+        return `${s.name} — ${s.state}${dates} (id: ${s.id})`;
+      }).join("\n");
+      return { content: [{ type: "text", text }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: formatError(err) }], isError: true };
+    }
+  },
+);
+
+server.tool(
+  "jira_move_to_sprint",
+  "Move one or more Jira issues to a sprint. IMPORTANT: Ask the user for confirmation before calling this tool.",
+  {
+    sprintId: z.number().describe("The sprint ID (from jira_list_sprints)"),
+    issueKeys: z.array(z.string()).describe("Issue keys to move (e.g. ['PROJ-1', 'PROJ-2'])"),
+  },
+  async ({ sprintId, issueKeys }) => {
+    try {
+      await getJiraClient().moveToSprint(sprintId, issueKeys);
+      return { content: [{ type: "text", text: `✓ Moved ${issueKeys.join(", ")} to sprint ${sprintId}.` }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: formatError(err) }], isError: true };
+    }
+  },
+);
+
+server.tool(
   "jira_search_users",
   "Search for Jira users by name or email — useful for finding accountIds to use with assignee fields",
   {

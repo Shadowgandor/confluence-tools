@@ -62,6 +62,72 @@ export function registerJiraCommands(program: Command) {
     });
 
   jira
+    .command("boards")
+    .description("List Jira boards")
+    .option("-l, --limit <n>", "Max results", "25")
+    .action(async (opts) => {
+      try {
+        const boards = await createClient().listBoards(Number(opts.limit));
+        if (boards.length === 0) {
+          console.log(chalk.yellow("No boards found."));
+          return;
+        }
+        for (const b of boards) {
+          const proj = b.location ? chalk.dim(` — ${b.location.projectName} [${b.location.projectKey}]`) : "";
+          console.log(`${chalk.bold(b.name)}${proj} ${chalk.dim(`(id: ${b.id}, ${b.type})`)}`);
+        }
+      } catch (err) {
+        handleError(err);
+      }
+    });
+
+  jira
+    .command("sprints <boardId>")
+    .description("List sprints on a board")
+    .option("--state <state>", "Filter by state: active, future, closed")
+    .action(async (boardId: string, opts) => {
+      try {
+        const state = opts.state as "active" | "future" | "closed" | undefined;
+        const sprints = await createClient().listSprints(Number(boardId), state);
+        if (sprints.length === 0) {
+          console.log(chalk.yellow("No sprints found."));
+          return;
+        }
+        for (const s of sprints) {
+          const dates = s.startDate && s.endDate
+            ? chalk.dim(` (${new Date(s.startDate).toLocaleDateString()} – ${new Date(s.endDate).toLocaleDateString()})`)
+            : "";
+          const stateColour = s.state === "active" ? chalk.green(s.state) : chalk.dim(s.state);
+          console.log(`${chalk.bold(s.name)} — ${stateColour}${dates} ${chalk.dim(`(id: ${s.id})`)}`);
+          if (s.goal) console.log(`  ${chalk.dim(s.goal)}`);
+        }
+      } catch (err) {
+        handleError(err);
+      }
+    });
+
+  jira
+    .command("move-to-sprint <sprintId> [issueKeys...]")
+    .description("Move one or more issues to a sprint")
+    .option("-y, --yes", "Skip confirmation prompt")
+    .action(async (sprintId: string, issueKeys: string[], opts) => {
+      try {
+        if (issueKeys.length === 0) {
+          console.error(chalk.red("Specify at least one issue key."));
+          process.exit(1);
+        }
+        if (!opts.yes) {
+          const ok = await confirm(`Move ${issueKeys.join(", ")} to sprint ${sprintId}?`);
+          if (!ok) { console.log(chalk.dim("Cancelled.")); return; }
+        }
+        await createClient().moveToSprint(Number(sprintId), issueKeys);
+        console.log(chalk.green(`✓ Moved ${issueKeys.join(", ")} to sprint ${sprintId}.`));
+      } catch (err) {
+        handleError(err);
+      }
+    });
+
+  jira
     .command("users <query>")
     .description("Search for users by name or email (to find accountIds for assignee)")
     .option("-l, --limit <n>", "Max results", "10")
