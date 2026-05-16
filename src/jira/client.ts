@@ -1,7 +1,8 @@
 import { readFile } from "fs/promises";
-import { basename, extname } from "path";
+import { basename } from "path";
 import { AtlassianClient } from "../core/client.js";
 import { AtlassianConfig } from "../core/types.js";
+import { attachmentMimeType } from "../core/mime.js";
 import {
   JiraProject,
   JiraIssue,
@@ -21,26 +22,6 @@ import {
   IssueSearchOptions,
 } from "./types.js";
 import { textToAdf, adfToText, buildJql } from "./helpers.js";
-
-function attachmentMimeType(filePath: string): string {
-  const map: Record<string, string> = {
-    ".png": "image/png",
-    ".jpg": "image/jpeg",
-    ".jpeg": "image/jpeg",
-    ".gif": "image/gif",
-    ".webp": "image/webp",
-    ".svg": "image/svg+xml",
-    ".pdf": "application/pdf",
-    ".zip": "application/zip",
-    ".txt": "text/plain",
-    ".csv": "text/csv",
-    ".json": "application/json",
-    ".xml": "application/xml",
-    ".html": "text/html",
-    ".md": "text/markdown",
-  };
-  return map[extname(filePath).toLowerCase()] ?? "application/octet-stream";
-}
 
 interface JiraSearchResponse {
   issues: JiraIssue[];

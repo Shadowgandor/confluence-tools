@@ -1,4 +1,4 @@
 export { AtlassianClient } from "./client.js";
 export { loadConfigFromEnv } from "./auth.js";
-export { markdownToStorage, resolveBody } from "./markdown.js";
+export { attachmentMimeType } from "./mime.js";
 export * from "./types.js";
