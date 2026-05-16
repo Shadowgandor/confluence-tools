@@ -532,4 +532,87 @@ export function registerJiraTools(server: McpServer): void {
       }
     },
   );
+
+  server.tool(
+    "jira_list_subtasks",
+    "List all subtasks of a Jira issue",
+    {
+      issueKey: z.string().describe("The parent issue key (e.g. 'PROJ-42')"),
+      limit: z.number().optional().describe("Max results (default 50)"),
+    },
+    async ({ issueKey, limit }) => {
+      try {
+        const subtasks = await getClient().listSubtasks(issueKey, limit ?? 50);
+        if (subtasks.length === 0) {
+          return { content: [{ type: "text", text: "No subtasks found." }] };
+        }
+        const text = subtasks
+          .map((i) => `${i.key} — ${i.fields.summary} [${i.fields.status.name}]`)
+          .join("\n");
+        return { content: [{ type: "text", text }] };
+      } catch (err) {
+        return { content: [{ type: "text", text: formatError(err) }], isError: true };
+      }
+    },
+  );
+
+  server.tool(
+    "jira_create_sprint",
+    "Create a new sprint on a Jira board. IMPORTANT: Ask the user for confirmation before calling this tool.",
+    {
+      boardId: z.number().describe("The board ID (from jira_list_boards)"),
+      name: z.string().describe("Sprint name"),
+      goal: z.string().optional().describe("Sprint goal"),
+      startDate: z.string().optional().describe("Start date (ISO 8601, e.g. '2024-06-01T00:00:00.000Z')"),
+      endDate: z.string().optional().describe("End date (ISO 8601)"),
+    },
+    async ({ boardId, name, goal, startDate, endDate }) => {
+      try {
+        const sprint = await getClient().createSprint({ boardId, name, goal, startDate, endDate });
+        const text = [
+          `✓ Sprint created.`,
+          `  Name:  ${sprint.name}`,
+          `  ID:    ${sprint.id}`,
+          `  State: ${sprint.state}`,
+        ].join("\n");
+        return { content: [{ type: "text", text }] };
+      } catch (err) {
+        return { content: [{ type: "text", text: formatError(err) }], isError: true };
+      }
+    },
+  );
+
+  server.tool(
+    "jira_update_sprint",
+    "Update a Jira sprint's name, goal, or dates. IMPORTANT: Ask the user for confirmation before calling this tool.",
+    {
+      sprintId: z.number().describe("The sprint ID (from jira_list_sprints)"),
+      name: z.string().optional().describe("New sprint name"),
+      goal: z.string().optional().describe("New sprint goal"),
+      startDate: z.string().optional().describe("New start date (ISO 8601)"),
+      endDate: z.string().optional().describe("New end date (ISO 8601)"),
+    },
+    async ({ sprintId, name, goal, startDate, endDate }) => {
+      try {
+        const sprint = await getClient().updateSprint(sprintId, { name, goal, startDate, endDate });
+        return { content: [{ type: "text", text: `✓ Updated sprint "${sprint.name}" (id: ${sprint.id}).` }] };
+      } catch (err) {
+        return { content: [{ type: "text", text: formatError(err) }], isError: true };
+      }
+    },
+  );
+
+  server.tool(
+    "jira_close_sprint",
+    "Close a Jira sprint (moves remaining open issues to backlog). IMPORTANT: Ask the user for confirmation before calling this tool.",
+    { sprintId: z.number().describe("The sprint ID to close (from jira_list_sprints)") },
+    async ({ sprintId }) => {
+      try {
+        const sprint = await getClient().closeSprint(sprintId);
+        return { content: [{ type: "text", text: `✓ Closed sprint "${sprint.name}" (id: ${sprint.id}).` }] };
+      } catch (err) {
+        return { content: [{ type: "text", text: formatError(err) }], isError: true };
+      }
+    },
+  );
 }

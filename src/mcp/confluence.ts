@@ -452,4 +452,57 @@ export function registerConfluenceTools(server: McpServer): void {
       }
     },
   );
+
+  server.tool(
+    "confluence_list_versions",
+    "List the version history of a Confluence page",
+    {
+      pageId: z.string().describe("The Confluence page ID"),
+      limit: z.number().optional().describe("Max versions to return (default 25)"),
+    },
+    async ({ pageId, limit }) => {
+      try {
+        const [page, versions] = await Promise.all([
+          getClient().getPage(pageId),
+          getClient().listVersions(pageId, limit ?? 25),
+        ]);
+        const header = `Version history for "${page.title}" (id: ${pageId})`;
+        const lines = versions.map((v) => {
+          const date = new Date(v.when).toLocaleString();
+          const author = v.by?.displayName ?? "Unknown";
+          const msg = v.message ? ` — ${v.message}` : "";
+          const minor = v.minorEdit ? " [minor]" : "";
+          return `v${v.number}  ${date}  ${author}${minor}${msg}`;
+        });
+        return { content: [{ type: "text", text: [header, ...lines].join("\n") }] };
+      } catch (err) {
+        return { content: [{ type: "text", text: formatError(err) }], isError: true };
+      }
+    },
+  );
+
+  server.tool(
+    "confluence_restore_version",
+    "Restore a Confluence page to a previous version (creates a new version with the old content). IMPORTANT: Ask the user for confirmation before calling this tool.",
+    {
+      pageId: z.string().describe("The Confluence page ID"),
+      versionNumber: z.number().describe("Version number to restore (from confluence_list_versions)"),
+    },
+    async ({ pageId, versionNumber }) => {
+      try {
+        const page = await getClient().restoreVersion(pageId, versionNumber);
+        const base = baseUrl();
+        const text = [
+          `✓ Restored to version ${versionNumber}.`,
+          `  Title:   ${page.title}`,
+          `  ID:      ${page.id}`,
+          `  Version: ${page.version.number}`,
+          `  URL:     ${base}/wiki/pages/${page.id}`,
+        ].join("\n");
+        return { content: [{ type: "text", text }] };
+      } catch (err) {
+        return { content: [{ type: "text", text: formatError(err) }], isError: true };
+      }
+    },
+  );
 }
