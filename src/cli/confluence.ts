@@ -134,6 +134,7 @@ export function registerConfluenceCommands(program: Command) {
     .option("-p, --parent <id>", "Parent page ID")
     .option("--draft", "Create as draft")
     .option("-y, --yes", "Skip confirmation prompt")
+    .option("--dry-run", "Print what would happen without making changes")
     .action(async (opts) => {
       try {
         if (!opts.file && !opts.template) {
@@ -159,6 +160,16 @@ export function registerConfluenceCommands(program: Command) {
           body = tpl.body?.storage?.value ?? "";
         } else {
           body = await resolveBody(opts.file);
+        }
+
+        if (opts.dryRun) {
+          console.log(chalk.cyan("[dry run] Would create page:"));
+          console.log(`  Space:    ${space.name} [${space.key}]`);
+          console.log(`  Title:    ${opts.title}`);
+          if (opts.template) console.log(`  Template: ${opts.template}`);
+          if (opts.parent) console.log(`  Parent:   ${opts.parent}`);
+          console.log(`  Status:   ${opts.draft ? "draft" : "published"}`);
+          return;
         }
 
         if (!opts.yes) {
@@ -199,11 +210,20 @@ export function registerConfluenceCommands(program: Command) {
     .option("-f, --file <path>", "New content file (.md, .html) or inline string")
     .option("-m, --message <msg>", "Version message")
     .option("-y, --yes", "Skip confirmation prompt")
+    .option("--dry-run", "Print what would happen without making changes")
     .action(async (pageId: string, opts) => {
       try {
         const client = createClient();
         const current = await client.getPage(pageId);
         const body = opts.file ? await resolveBody(opts.file) : undefined;
+
+        if (opts.dryRun) {
+          console.log(chalk.cyan("[dry run] Would update page:"));
+          console.log(`  Page:    ${formatPage(current)}`);
+          if (opts.title) console.log(`  Title:   ${current.title} → ${opts.title}`);
+          if (body) console.log(`  Body:    will be replaced`);
+          return;
+        }
 
         if (!opts.yes) {
           console.log(chalk.yellow("⚠ About to update page:"));
@@ -241,10 +261,19 @@ export function registerConfluenceCommands(program: Command) {
     .option("--attachments", "Also copy attachments")
     .option("--labels", "Also copy labels")
     .option("-y, --yes", "Skip confirmation prompt")
+    .option("--dry-run", "Print what would happen without making changes")
     .action(async (pageId: string, opts) => {
       try {
         const client = createClient();
         const source = await client.getPage(pageId);
+
+        if (opts.dryRun) {
+          console.log(chalk.cyan("[dry run] Would copy page:"));
+          console.log(`  Source:      ${formatPage(source)}`);
+          console.log(`  New title:   ${opts.title}`);
+          console.log(`  Destination: parent page ${opts.destination}`);
+          return;
+        }
 
         if (!opts.yes) {
           console.log(chalk.yellow("⚠ About to copy page:"));
@@ -323,8 +352,14 @@ export function registerConfluenceCommands(program: Command) {
     .description("Add a comment to a page")
     .requiredOption("-t, --text <text>", "Comment text")
     .option("-y, --yes", "Skip confirmation prompt")
+    .option("--dry-run", "Print what would happen without making changes")
     .action(async (pageId: string, opts) => {
       try {
+        if (opts.dryRun) {
+          console.log(chalk.cyan(`[dry run] Would add comment to page ${pageId}:`));
+          console.log(`  Text: ${opts.text}`);
+          return;
+        }
         if (!opts.yes) {
           const ok = await confirm(`Add comment to page ${pageId}?`);
           if (!ok) { console.log(chalk.dim("Cancelled.")); return; }
@@ -357,11 +392,17 @@ export function registerConfluenceCommands(program: Command) {
     .command("add-label <pageId> [labels...]")
     .description("Add one or more labels to a page")
     .option("-y, --yes", "Skip confirmation prompt")
+    .option("--dry-run", "Print what would happen without making changes")
     .action(async (pageId: string, labels: string[], opts) => {
       try {
         if (labels.length === 0) {
           console.error(chalk.red("Specify at least one label."));
           process.exit(1);
+        }
+        if (opts.dryRun) {
+          console.log(chalk.cyan(`[dry run] Would add labels to page ${pageId}:`));
+          console.log(`  Labels: ${labels.join(", ")}`);
+          return;
         }
         if (!opts.yes) {
           const ok = await confirm(`Add labels [${labels.join(", ")}] to page ${pageId}?`);
@@ -378,8 +419,14 @@ export function registerConfluenceCommands(program: Command) {
     .command("remove-label <pageId> <label>")
     .description("Remove a label from a page")
     .option("-y, --yes", "Skip confirmation prompt")
+    .option("--dry-run", "Print what would happen without making changes")
     .action(async (pageId: string, label: string, opts) => {
       try {
+        if (opts.dryRun) {
+          console.log(chalk.cyan(`[dry run] Would remove label from page ${pageId}:`));
+          console.log(`  Label: ${label}`);
+          return;
+        }
         if (!opts.yes) {
           const ok = await confirm(`Remove label "${label}" from page ${pageId}?`);
           if (!ok) { console.log(chalk.dim("Cancelled.")); return; }
@@ -416,10 +463,19 @@ export function registerConfluenceCommands(program: Command) {
     .description("Upload a file as an attachment to a page")
     .option("-c, --comment <text>", "Attachment comment")
     .option("-y, --yes", "Skip confirmation prompt")
+    .option("--dry-run", "Print what would happen without making changes")
     .action(async (pageId: string, file: string, opts) => {
       try {
         const client = createClient();
         const page = await client.getPage(pageId);
+
+        if (opts.dryRun) {
+          console.log(chalk.cyan("[dry run] Would attach file to page:"));
+          console.log(`  Page: ${formatPage(page)}`);
+          console.log(`  File: ${file}`);
+          if (opts.comment) console.log(`  Comment: ${opts.comment}`);
+          return;
+        }
 
         if (!opts.yes) {
           console.log(chalk.yellow("⚠ About to attach file to page:"));
@@ -476,10 +532,17 @@ export function registerConfluenceCommands(program: Command) {
     .command("delete <pageId>")
     .description("Delete a page")
     .option("-y, --yes", "Skip confirmation prompt")
+    .option("--dry-run", "Print what would happen without making changes")
     .action(async (pageId: string, opts) => {
       try {
         const client = createClient();
         const page = await client.getPage(pageId);
+
+        if (opts.dryRun) {
+          console.log(chalk.cyan("[dry run] Would DELETE page:"));
+          console.log(`  ${formatPage(page)}`);
+          return;
+        }
 
         if (!opts.yes) {
           console.log(chalk.red("⚠ About to DELETE page:"));

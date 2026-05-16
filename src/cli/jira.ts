@@ -2,7 +2,7 @@ import { Command } from "commander";
 import chalk from "chalk";
 import { loadConfigFromEnv } from "../core/auth.js";
 import { JiraClient } from "../jira/client.js";
-import { JiraIssue } from "../jira/types.js";
+import { JiraIssue, JiraSprint } from "../jira/types.js";
 import { handleError, confirm } from "./helpers.js";
 
 function createClient(): JiraClient {
@@ -129,11 +129,18 @@ export function registerJiraCommands(program: Command) {
     .command("move-to-sprint <sprintId> [issueKeys...]")
     .description("Move one or more issues to a sprint")
     .option("-y, --yes", "Skip confirmation prompt")
+    .option("--dry-run", "Print what would happen without making changes")
     .action(async (sprintId: string, issueKeys: string[], opts) => {
       try {
         if (issueKeys.length === 0) {
           console.error(chalk.red("Specify at least one issue key."));
           process.exit(1);
+        }
+        if (opts.dryRun) {
+          console.log(chalk.cyan("[dry run] Would move issues to sprint:"));
+          console.log(`  Issues: ${issueKeys.join(", ")}`);
+          console.log(`  Sprint: ${sprintId}`);
+          return;
         }
         if (!opts.yes) {
           const ok = await confirm(`Move ${issueKeys.join(", ")} to sprint ${sprintId}?`);
@@ -141,6 +148,117 @@ export function registerJiraCommands(program: Command) {
         }
         await createClient().moveToSprint(Number(sprintId), issueKeys);
         console.log(chalk.green(`✓ Moved ${issueKeys.join(", ")} to sprint ${sprintId}.`));
+      } catch (err) {
+        handleError(err);
+      }
+    });
+
+  jira
+    .command("subtasks <issueKey>")
+    .description("List subtasks of an issue")
+    .option("-l, --limit <n>", "Max results", "50")
+    .action(async (issueKey: string, opts) => {
+      try {
+        const subtasks = await createClient().listSubtasks(issueKey, Number(opts.limit));
+        if (subtasks.length === 0) {
+          console.log(chalk.yellow("No subtasks found."));
+          return;
+        }
+        for (const i of subtasks) {
+          console.log(formatIssue(i));
+        }
+      } catch (err) {
+        handleError(err);
+      }
+    });
+
+  jira
+    .command("create-sprint")
+    .description("Create a new sprint on a board")
+    .requiredOption("--board <id>", "Board ID")
+    .requiredOption("--name <name>", "Sprint name")
+    .option("--goal <text>", "Sprint goal")
+    .option("--start <date>", "Start date (ISO 8601)")
+    .option("--end <date>", "End date (ISO 8601)")
+    .option("-y, --yes", "Skip confirmation prompt")
+    .option("--dry-run", "Print what would happen without making changes")
+    .action(async (opts) => {
+      try {
+        if (opts.dryRun) {
+          console.log(chalk.cyan("[dry run] Would create sprint:"));
+          console.log(`  Board:  ${opts.board}`);
+          console.log(`  Name:   ${opts.name}`);
+          if (opts.goal) console.log(`  Goal:   ${opts.goal}`);
+          return;
+        }
+        if (!opts.yes) {
+          const ok = await confirm(`Create sprint "${opts.name}" on board ${opts.board}?`);
+          if (!ok) { console.log(chalk.dim("Cancelled.")); return; }
+        }
+        const sprint = await createClient().createSprint({
+          boardId: Number(opts.board),
+          name: opts.name,
+          goal: opts.goal,
+          startDate: opts.start,
+          endDate: opts.end,
+        });
+        console.log(chalk.green(`✓ Created sprint: ${chalk.bold(sprint.name)} ${chalk.dim(`(id: ${sprint.id})`)}`));
+      } catch (err) {
+        handleError(err);
+      }
+    });
+
+  jira
+    .command("update-sprint <sprintId>")
+    .description("Update a sprint's name, goal, or dates")
+    .option("--name <name>", "New sprint name")
+    .option("--goal <text>", "New sprint goal")
+    .option("--start <date>", "New start date (ISO 8601)")
+    .option("--end <date>", "New end date (ISO 8601)")
+    .option("-y, --yes", "Skip confirmation prompt")
+    .option("--dry-run", "Print what would happen without making changes")
+    .action(async (sprintId: string, opts) => {
+      try {
+        if (opts.dryRun) {
+          console.log(chalk.cyan("[dry run] Would update sprint:"));
+          console.log(`  Sprint: ${sprintId}`);
+          if (opts.name) console.log(`  Name:   ${opts.name}`);
+          if (opts.goal) console.log(`  Goal:   ${opts.goal}`);
+          return;
+        }
+        if (!opts.yes) {
+          const ok = await confirm(`Update sprint ${sprintId}?`);
+          if (!ok) { console.log(chalk.dim("Cancelled.")); return; }
+        }
+        const sprint = await createClient().updateSprint(Number(sprintId), {
+          name: opts.name,
+          goal: opts.goal,
+          startDate: opts.start,
+          endDate: opts.end,
+        });
+        console.log(chalk.green(`✓ Updated sprint: ${chalk.bold(sprint.name)} ${chalk.dim(`(id: ${sprint.id})`)}`));
+      } catch (err) {
+        handleError(err);
+      }
+    });
+
+  jira
+    .command("close-sprint <sprintId>")
+    .description("Close a sprint (moves remaining issues to backlog)")
+    .option("-y, --yes", "Skip confirmation prompt")
+    .option("--dry-run", "Print what would happen without making changes")
+    .action(async (sprintId: string, opts) => {
+      try {
+        if (opts.dryRun) {
+          console.log(chalk.cyan(`[dry run] Would close sprint ${sprintId}`));
+          return;
+        }
+        if (!opts.yes) {
+          const ok = await confirm(`Close sprint ${sprintId}? This cannot be undone.`);
+          if (!ok) { console.log(chalk.dim("Cancelled.")); return; }
+        }
+        const sprint = await createClient().closeSprint(Number(sprintId));
+        console.log(chalk.green(`✓ Closed sprint: ${chalk.bold(sprint.name)} ${chalk.dim(`(id: ${sprint.id})`)}`));
       } catch (err) {
         handleError(err);
       }
@@ -236,9 +354,20 @@ export function registerJiraCommands(program: Command) {
     .option("--labels <labels>", "Comma-separated labels")
     .option("--parent <key>", "Parent issue key (creates a subtask)")
     .option("-y, --yes", "Skip confirmation prompt")
+    .option("--dry-run", "Print what would happen without making changes")
     .action(async (opts) => {
       try {
         const client = createClient();
+
+        if (opts.dryRun) {
+          console.log(chalk.cyan("[dry run] Would create issue:"));
+          console.log(`  Project: ${opts.project}`);
+          console.log(`  Type:    ${opts.type}`);
+          console.log(`  Summary: ${opts.summary}`);
+          if (opts.priority) console.log(`  Priority: ${opts.priority}`);
+          if (opts.parent) console.log(`  Parent:  ${opts.parent}`);
+          return;
+        }
 
         if (!opts.yes) {
           console.log(chalk.yellow("⚠ About to create issue:"));
@@ -281,10 +410,19 @@ export function registerJiraCommands(program: Command) {
     .option("--priority <name>", "New priority")
     .option("--labels <labels>", "Comma-separated labels")
     .option("-y, --yes", "Skip confirmation prompt")
+    .option("--dry-run", "Print what would happen without making changes")
     .action(async (issueKey: string, opts) => {
       try {
         const client = createClient();
         const current = await client.getIssue(issueKey);
+
+        if (opts.dryRun) {
+          console.log(chalk.cyan("[dry run] Would update issue:"));
+          console.log(`  ${formatIssue(current)}`);
+          if (opts.summary) console.log(`  Summary: ${current.fields.summary} → ${opts.summary}`);
+          if (opts.priority) console.log(`  Priority: → ${opts.priority}`);
+          return;
+        }
 
         if (!opts.yes) {
           console.log(chalk.yellow("⚠ About to update issue:"));
@@ -321,6 +459,7 @@ export function registerJiraCommands(program: Command) {
     .option("--to <status>", "Target status name")
     .option("--list", "List available transitions")
     .option("-y, --yes", "Skip confirmation prompt")
+    .option("--dry-run", "Print what would happen without making changes")
     .action(async (issueKey: string, opts) => {
       try {
         const client = createClient();
@@ -343,6 +482,13 @@ export function registerJiraCommands(program: Command) {
             console.error(`  • ${t.name} → ${t.to.name}`);
           }
           process.exit(1);
+        }
+
+        if (opts.dryRun) {
+          const issue = await client.getIssue(issueKey);
+          console.log(chalk.cyan(`[dry run] Would transition ${chalk.bold(issueKey)}:`));
+          console.log(`  ${issue.fields.status.name} → ${match.to.name}`);
+          return;
         }
 
         if (!opts.yes) {
@@ -392,8 +538,16 @@ export function registerJiraCommands(program: Command) {
     .option("--comment <text>", "Work description")
     .option("--started <datetime>", "When work started (ISO datetime, defaults to now)")
     .option("-y, --yes", "Skip confirmation prompt")
+    .option("--dry-run", "Print what would happen without making changes")
     .action(async (issueKey: string, opts) => {
       try {
+        if (opts.dryRun) {
+          console.log(chalk.cyan(`[dry run] Would log time on ${issueKey}:`));
+          console.log(`  Time: ${opts.time}`);
+          if (opts.comment) console.log(`  Comment: ${opts.comment}`);
+          if (opts.started) console.log(`  Started: ${opts.started}`);
+          return;
+        }
         if (!opts.yes) {
           const ok = await confirm(`Log ${opts.time} on ${issueKey}?`);
           if (!ok) { console.log(chalk.dim("Cancelled.")); return; }
@@ -438,8 +592,14 @@ export function registerJiraCommands(program: Command) {
     .requiredOption("--type <name>", "Link type (e.g. 'Blocks', 'Relates to')")
     .requiredOption("--target <key>", "Target issue key")
     .option("-y, --yes", "Skip confirmation prompt")
+    .option("--dry-run", "Print what would happen without making changes")
     .action(async (issueKey: string, opts) => {
       try {
+        if (opts.dryRun) {
+          console.log(chalk.cyan(`[dry run] Would link issue:`));
+          console.log(`  ${issueKey} "${opts.type}" ${opts.target}`);
+          return;
+        }
         if (!opts.yes) {
           const ok = await confirm(`Link ${issueKey} "${opts.type}" ${opts.target}?`);
           if (!ok) { console.log(chalk.dim("Cancelled.")); return; }
@@ -493,8 +653,14 @@ export function registerJiraCommands(program: Command) {
     .description("Add a comment to an issue")
     .requiredOption("-t, --text <text>", "Comment text")
     .option("-y, --yes", "Skip confirmation prompt")
+    .option("--dry-run", "Print what would happen without making changes")
     .action(async (issueKey: string, opts) => {
       try {
+        if (opts.dryRun) {
+          console.log(chalk.cyan(`[dry run] Would add comment to ${issueKey}:`));
+          console.log(`  Text: ${opts.text}`);
+          return;
+        }
         if (!opts.yes) {
           const ok = await confirm(`Add comment to ${issueKey}?`);
           if (!ok) { console.log(chalk.dim("Cancelled.")); return; }
@@ -510,10 +676,18 @@ export function registerJiraCommands(program: Command) {
     .command("attach <issueKey> <file>")
     .description("Upload a file as an attachment to an issue")
     .option("-y, --yes", "Skip confirmation prompt")
+    .option("--dry-run", "Print what would happen without making changes")
     .action(async (issueKey: string, file: string, opts) => {
       try {
         const client = createClient();
         const issue = await client.getIssue(issueKey);
+
+        if (opts.dryRun) {
+          console.log(chalk.cyan("[dry run] Would attach file to issue:"));
+          console.log(`  Issue: ${chalk.bold(issue.key)} ${issue.fields.summary}`);
+          console.log(`  File:  ${file}`);
+          return;
+        }
 
         if (!opts.yes) {
           console.log(chalk.yellow("⚠ About to attach file to issue:"));
@@ -567,10 +741,17 @@ export function registerJiraCommands(program: Command) {
     .command("delete <issueKey>")
     .description("Delete an issue")
     .option("-y, --yes", "Skip confirmation prompt")
+    .option("--dry-run", "Print what would happen without making changes")
     .action(async (issueKey: string, opts) => {
       try {
         const client = createClient();
         const issue = await client.getIssue(issueKey);
+
+        if (opts.dryRun) {
+          console.log(chalk.cyan("[dry run] Would DELETE issue:"));
+          console.log(`  ${formatIssue(issue)}`);
+          return;
+        }
 
         if (!opts.yes) {
           console.log(chalk.red("⚠ About to DELETE issue:"));
