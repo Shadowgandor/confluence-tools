@@ -1,12 +1,36 @@
+import { readFile } from "fs/promises";
+import { basename, extname } from "path";
 import { AtlassianClient } from "../core/client.js";
 import { AtlassianConfig, PaginatedResponse } from "../core/types.js";
 import {
   ConfluencePage,
   ConfluenceSpace,
+  ConfluenceAttachment,
+  AttachmentUploadInput,
   PageCreateInput,
   PageUpdateInput,
   PageSearchOptions,
 } from "./types.js";
+
+function attachmentMimeType(filePath: string): string {
+  const map: Record<string, string> = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+    ".svg": "image/svg+xml",
+    ".pdf": "application/pdf",
+    ".zip": "application/zip",
+    ".txt": "text/plain",
+    ".csv": "text/csv",
+    ".json": "application/json",
+    ".xml": "application/xml",
+    ".html": "text/html",
+    ".md": "text/markdown",
+  };
+  return map[extname(filePath).toLowerCase()] ?? "application/octet-stream";
+}
 
 export class ConfluenceClient {
   private readonly http: AtlassianClient;
@@ -127,5 +151,47 @@ export class ConfluenceClient {
     await this.http.request<void>(`/api/v2/pages/${pageId}`, {
       method: "DELETE",
     });
+  }
+
+  // ── Attachments ───────────────────────────────────────────────────
+
+  async uploadAttachment(input: AttachmentUploadInput): Promise<ConfluenceAttachment> {
+    const { pageId, filePath, comment } = input;
+    const fileBuffer = await readFile(filePath);
+    const fileName = basename(filePath);
+    const blob = new Blob([fileBuffer], { type: attachmentMimeType(filePath) });
+
+    const formData = new FormData();
+    formData.append("file", blob, fileName);
+    if (comment) formData.append("comment", comment);
+
+    const raw = await this.http.request<{
+      results: Array<{
+        id: string;
+        title: string;
+        metadata?: { mediaType?: string; comment?: string };
+        _links?: { download?: string; webui?: string; base?: string };
+      }>;
+    }>(`/rest/api/content/${pageId}/child/attachment`, {
+      method: "POST",
+      body: formData,
+      headers: { "X-Atlassian-Token": "no-check" },
+    });
+
+    const att = raw.results[0];
+    return {
+      id: att.id,
+      title: att.title,
+      mediaType: att.metadata?.mediaType ?? attachmentMimeType(filePath),
+      comment: att.metadata?.comment,
+      _links: att._links,
+    };
+  }
+
+  async listAttachments(pageId: string): Promise<ConfluenceAttachment[]> {
+    const result = await this.http.request<PaginatedResponse<ConfluenceAttachment>>(
+      `/api/v2/pages/${pageId}/attachments`,
+    );
+    return result.results;
   }
 }

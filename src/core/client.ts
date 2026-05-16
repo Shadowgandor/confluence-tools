@@ -20,11 +20,13 @@ export class AtlassianClient {
       ? path
       : `${this.baseUrl}${this.pathPrefix}${path}`;
 
+    const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
+
     const response = await fetch(url, {
       ...options,
       headers: {
         Authorization: this.authHeader,
-        "Content-Type": "application/json",
+        ...(isFormData ? {} : { "Content-Type": "application/json" }),
         Accept: "application/json",
         ...options.headers,
       },

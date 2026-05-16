@@ -36,3 +36,18 @@ export interface PageSearchOptions {
   title?: string;
   limit?: number;
 }
+
+export interface ConfluenceAttachment {
+  id: string;
+  title: string;
+  mediaType: string;
+  fileSize?: number;
+  comment?: string;
+  _links?: { download?: string; webui?: string; base?: string };
+}
+
+export interface AttachmentUploadInput {
+  pageId: string;
+  filePath: string;
+  comment?: string;
+}

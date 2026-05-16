@@ -191,6 +191,67 @@ export function registerConfluenceCommands(program: Command) {
     });
 
   confluence
+    .command("attach <pageId> <file>")
+    .description("Upload a file as an attachment to a page")
+    .option("-c, --comment <text>", "Attachment comment")
+    .option("-y, --yes", "Skip confirmation prompt")
+    .action(async (pageId: string, file: string, opts) => {
+      try {
+        const client = createClient();
+        const page = await client.getPage(pageId);
+
+        if (!opts.yes) {
+          console.log(chalk.yellow("⚠ About to attach file to page:"));
+          console.log(`  Page: ${formatPage(page)}`);
+          console.log(`  File: ${file}`);
+          if (opts.comment) console.log(`  Comment: ${opts.comment}`);
+          console.log();
+
+          const ok = await confirm("Proceed?");
+          if (!ok) {
+            console.log(chalk.dim("Cancelled."));
+            return;
+          }
+        }
+
+        const att = await client.uploadAttachment({ pageId, filePath: file, comment: opts.comment });
+        const base = page._links?.base ?? process.env.ATLASSIAN_URL ?? process.env.CONFLUENCE_URL?.replace(/\/wiki\/?$/, "") ?? "";
+        console.log(chalk.green(`✓ Uploaded: ${chalk.bold(att.title)} ${chalk.dim(`(id: ${att.id}, ${att.mediaType})`)}`));
+        if (att._links?.download) {
+          console.log(`  ${chalk.cyan(`${base}/wiki${att._links.download}`)}`);
+        }
+      } catch (err) {
+        handleError(err);
+      }
+    });
+
+  confluence
+    .command("attachments <pageId>")
+    .description("List attachments on a page")
+    .action(async (pageId: string) => {
+      try {
+        const client = createClient();
+        const page = await client.getPage(pageId);
+        const attachments = await client.listAttachments(pageId);
+
+        console.log(`Attachments on ${chalk.bold(page.title)} ${chalk.dim(`(id: ${pageId})`)}`);
+        if (attachments.length === 0) {
+          console.log(chalk.yellow("  No attachments."));
+          return;
+        }
+        const base = page._links?.base ?? process.env.ATLASSIAN_URL ?? process.env.CONFLUENCE_URL?.replace(/\/wiki\/?$/, "") ?? "";
+        for (const att of attachments) {
+          console.log(`  ${chalk.bold(att.title)} ${chalk.dim(`(id: ${att.id}, ${att.mediaType}${att.fileSize ? `, ${att.fileSize} bytes` : ""})`)}`);
+          if (att._links?.download) {
+            console.log(`    ${chalk.cyan(`${base}/wiki${att._links.download}`)}`);
+          }
+        }
+      } catch (err) {
+        handleError(err);
+      }
+    });
+
+  confluence
     .command("delete <pageId>")
     .description("Delete a page")
     .option("-y, --yes", "Skip confirmation prompt")

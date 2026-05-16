@@ -223,6 +223,60 @@ server.tool(
   },
 );
 
+server.tool(
+  "confluence_upload_attachment",
+  "Upload a file as an attachment to a Confluence page. IMPORTANT: Ask the user for confirmation before calling this tool.",
+  {
+    pageId: z.string().describe("The page ID to attach the file to"),
+    filePath: z.string().describe("Absolute path to the file to upload"),
+    comment: z.string().optional().describe("Optional comment for the attachment"),
+  },
+  async ({ pageId, filePath, comment }) => {
+    try {
+      const att = await getConfluenceClient().uploadAttachment({ pageId, filePath, comment });
+      const baseUrl = process.env.ATLASSIAN_URL ?? process.env.CONFLUENCE_URL?.replace(/\/wiki\/?$/, "") ?? "";
+      const downloadUrl = att._links?.download ? `${baseUrl}/wiki${att._links.download}` : "";
+      const text = [
+        `✓ Attachment uploaded successfully.`,
+        `  File:     ${att.title}`,
+        `  ID:       ${att.id}`,
+        `  Type:     ${att.mediaType}`,
+        ...(downloadUrl ? [`  Download: ${downloadUrl}`] : []),
+      ].join("\n");
+      return { content: [{ type: "text", text }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: formatError(err) }], isError: true };
+    }
+  },
+);
+
+server.tool(
+  "confluence_list_attachments",
+  "List all attachments on a Confluence page",
+  { pageId: z.string().describe("The Confluence page ID") },
+  async ({ pageId }) => {
+    try {
+      const attachments = await getConfluenceClient().listAttachments(pageId);
+      if (attachments.length === 0) {
+        return { content: [{ type: "text", text: "No attachments found." }] };
+      }
+      const baseUrl = process.env.ATLASSIAN_URL ?? process.env.CONFLUENCE_URL?.replace(/\/wiki\/?$/, "") ?? "";
+      const text = attachments
+        .map((a) => {
+          const downloadUrl = a._links?.download ? `${baseUrl}/wiki${a._links.download}` : "";
+          return [
+            `${a.title} (id: ${a.id}, ${a.mediaType}${a.fileSize ? `, ${a.fileSize} bytes` : ""})`,
+            ...(downloadUrl ? [`  ${downloadUrl}`] : []),
+          ].join("\n");
+        })
+        .join("\n");
+      return { content: [{ type: "text", text }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: formatError(err) }], isError: true };
+    }
+  },
+);
+
 // ── Jira tools ─────────────────────────────────────────────────────
 
 server.tool(
