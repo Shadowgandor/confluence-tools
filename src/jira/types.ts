@@ -95,3 +95,19 @@ export interface JiraIssueLink {
   inwardIssue?: { id: string; key: string; fields: { summary: string; status: { name: string } } };
   outwardIssue?: { id: string; key: string; fields: { summary: string; status: { name: string } } };
 }
+
+export interface JiraWorklog {
+  id: string;
+  author?: { displayName: string };
+  timeSpent: string;
+  timeSpentSeconds: number;
+  started: string;
+  comment?: unknown;
+}
+
+export interface WorklogInput {
+  issueKey: string;
+  timeSpent: string;
+  started?: string;
+  comment?: string;
+}

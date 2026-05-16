@@ -626,6 +626,51 @@ server.tool(
 );
 
 server.tool(
+  "jira_list_worklogs",
+  "List work log entries on a Jira issue",
+  { issueKey: z.string().describe("The issue key (e.g. 'PROJ-123')") },
+  async ({ issueKey }) => {
+    try {
+      const worklogs = await getJiraClient().listWorklogs(issueKey);
+      if (worklogs.length === 0) {
+        return { content: [{ type: "text", text: "No work logged." }] };
+      }
+      const text = worklogs.map((w) => {
+        const author = w.author?.displayName ?? "Unknown";
+        const date = new Date(w.started).toLocaleDateString();
+        return `${author} · ${date} · ${w.timeSpent}`;
+      }).join("\n");
+      return { content: [{ type: "text", text }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: formatError(err) }], isError: true };
+    }
+  },
+);
+
+server.tool(
+  "jira_log_work",
+  "Log time worked on a Jira issue. IMPORTANT: Ask the user for confirmation before calling this tool.",
+  {
+    issueKey: z.string().describe("The issue key (e.g. 'PROJ-123')"),
+    timeSpent: z.string().describe("Time spent, e.g. '2h', '30m', '1d 2h'"),
+    started: z.string().optional().describe("When work started (ISO datetime, defaults to now)"),
+    comment: z.string().optional().describe("Work description"),
+  },
+  async ({ issueKey, timeSpent, started, comment }) => {
+    try {
+      const log = await getJiraClient().addWorklog({ issueKey, timeSpent, started, comment });
+      const text = [
+        `✓ Logged ${log.timeSpent} on ${issueKey}.`,
+        `  Started: ${new Date(log.started).toLocaleString()}`,
+      ].join("\n");
+      return { content: [{ type: "text", text }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: formatError(err) }], isError: true };
+    }
+  },
+);
+
+server.tool(
   "jira_list_link_types",
   "List available Jira issue link types (e.g. Blocks, Clones, Relates)",
   {},

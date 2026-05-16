@@ -10,6 +10,8 @@ import {
   JiraComment,
   JiraLinkType,
   JiraIssueLink,
+  JiraWorklog,
+  WorklogInput,
   JiraTransition,
   IssueCreateInput,
   IssueUpdateInput,
@@ -160,6 +162,28 @@ export class JiraClient {
     await this.http.request<void>(
       `/rest/api/3/issue/${encodeURIComponent(issueKey)}`,
       { method: "DELETE" },
+    );
+  }
+
+  // ── Worklogs ─────────────────────────────────────────────────────
+
+  async listWorklogs(issueKey: string): Promise<JiraWorklog[]> {
+    const result = await this.http.request<{ worklogs: JiraWorklog[] }>(
+      `/rest/api/3/issue/${encodeURIComponent(issueKey)}/worklog`,
+    );
+    return result.worklogs;
+  }
+
+  async addWorklog(input: WorklogInput): Promise<JiraWorklog> {
+    const payload: Record<string, unknown> = {
+      timeSpent: input.timeSpent,
+      started: input.started ?? new Date().toISOString().replace("Z", "+0000"),
+    };
+    if (input.comment) payload.comment = textToAdf(input.comment);
+
+    return this.http.request<JiraWorklog>(
+      `/rest/api/3/issue/${encodeURIComponent(input.issueKey)}/worklog`,
+      { method: "POST", body: JSON.stringify(payload) },
     );
   }
 

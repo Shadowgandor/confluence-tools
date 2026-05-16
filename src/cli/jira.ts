@@ -259,6 +259,51 @@ export function registerJiraCommands(program: Command) {
     });
 
   jira
+    .command("worklogs <issueKey>")
+    .description("List work log entries on an issue")
+    .action(async (issueKey: string) => {
+      try {
+        const worklogs = await createClient().listWorklogs(issueKey);
+        if (worklogs.length === 0) {
+          console.log(chalk.yellow("No work logged."));
+          return;
+        }
+        for (const w of worklogs) {
+          const author = w.author?.displayName ?? "Unknown";
+          const date = new Date(w.started).toLocaleDateString();
+          console.log(`  ${chalk.bold(w.timeSpent)} ${chalk.dim(`· ${author} · ${date}`)}`);
+        }
+      } catch (err) {
+        handleError(err);
+      }
+    });
+
+  jira
+    .command("log <issueKey>")
+    .description("Log time worked on an issue")
+    .requiredOption("--time <duration>", "Time spent, e.g. '2h', '30m', '1d 2h'")
+    .option("--comment <text>", "Work description")
+    .option("--started <datetime>", "When work started (ISO datetime, defaults to now)")
+    .option("-y, --yes", "Skip confirmation prompt")
+    .action(async (issueKey: string, opts) => {
+      try {
+        if (!opts.yes) {
+          const ok = await confirm(`Log ${opts.time} on ${issueKey}?`);
+          if (!ok) { console.log(chalk.dim("Cancelled.")); return; }
+        }
+        const log = await createClient().addWorklog({
+          issueKey,
+          timeSpent: opts.time,
+          started: opts.started,
+          comment: opts.comment,
+        });
+        console.log(chalk.green(`✓ Logged ${log.timeSpent} on ${issueKey}.`));
+      } catch (err) {
+        handleError(err);
+      }
+    });
+
+  jira
     .command("links <issueKey>")
     .description("List links on an issue")
     .action(async (issueKey: string) => {
